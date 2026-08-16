@@ -35,23 +35,105 @@ It prints the public names it added and removed, so a change to your package's
 API is something a person sees in review rather than something that lands
 unannounced.
 
-## Getting started
+## Quick start
 
-1. Copy this directory into a new repository, run `git init` if needed, then
-   `npm install`, which also installs the git hooks via the `prepare` script.
-2. Make it yours in `package.json`: `name`, `description`, `repository`,
-   `keywords`. That name is what your users will install.
-3. Point `spec` in `dungbeetle.config.ts` at the API's OpenAPI document and run
-   `npm run generate`. Read what lands in `src/resources/`, and settle any name
-   collisions it reports through the `names` map in the same file.
-4. Delete what the template ships as examples: `src/resources/example.ts` and
-   the generated `src/resources/users.ts`, with their exports in `index.ts` and
-   their entries in `tests/dist/public-api.test.js`.
-5. Add tests under `tests/` as `*.test.ts`, then `npm test` and `npm run build`.
+A worked example against a real API: the Arch User Repository's `/rpc`
+endpoints, which are public and need no credentials.
 
-An API that publishes no OpenAPI document works the same way by hand: skip
-step 3, delete `tools/` and `dungbeetle.config.ts`, and follow
-[Writing a wrapper](#writing-a-wrapper). That drops three devDependencies with
+**1. Copy this repository into a new one and install.**
+
+```sh
+npm install
+```
+
+**2. Point the config at the document.**
+
+```ts
+// dungbeetle.config.ts
+export default {
+	spec: "https://aur.archlinux.org/rpc/openapi.json",
+};
+```
+
+**3. Generate.**
+
+```sh
+npm run generate
+```
+
+```
+src/schema.ts written
+src/resources/rpc.ts written
+src/resources/users.ts removed, the document no longer describes it
+index.ts written
+tests/dist/public-api.test.js written
+public names added: createRpcInfo, getRpcInfo, getRpcSearch, getRpcSuggest, getRpcSuggestPkgbase, listRpcInfo
+public names removed: createUser, deleteUser, getUser, listUserSessions, listUsers
+```
+
+Six endpoints in one module, `src/resources/rpc.ts`. The demo resource the
+template ships was generated too, so it goes; `src/resources/example.ts` is
+hand-written, carries no banner, and stays.
+
+**4. Fix the names.** Every AUR path begins `/rpc/v5/`, so every function came
+out reading `Rpc`. Names come from paths, and where a path reads badly the
+`names` map is where you say so:
+
+```ts
+// dungbeetle.config.ts
+export default {
+	spec: "https://aur.archlinux.org/rpc/openapi.json",
+	names: {
+		"GET /rpc/v5/search/{arg}": "searchPackages",
+		"GET /rpc/v5/info/{arg}": "getPackage",
+		"GET /rpc/v5/info": "listPackages",
+		"POST /rpc/v5/info": "listPackagesByPost",
+		"GET /rpc/v5/suggest/{arg}": "suggestPackageNames",
+		"GET /rpc/v5/suggest-pkgbase/{arg}": "suggestPackageBases",
+	},
+};
+```
+
+`npm run generate` again, and it reports the trade:
+
+```
+public names added: getPackage, listPackages, listPackagesByPost, searchPackages, suggestPackageBases, suggestPackageNames
+public names removed: createRpcInfo, getRpcInfo, getRpcSearch, getRpcSuggest, getRpcSuggestPkgbase, listRpcInfo
+```
+
+**5. Call it.** The AUR's document declares no `servers`, so the base URL is
+yours to give:
+
+```ts
+import { ApiClient, getPackage, searchPackages } from "./index.js";
+
+const aur = new ApiClient({ baseUrl: "https://aur.archlinux.org" });
+
+const found = await aur.request(searchPackages("neovim-git", { by: "name" }));
+console.log(found.resultcount, found.results?.[0]?.Name);
+
+const yay = await aur.request(getPackage("yay"));
+console.log(yay.results?.[0]?.Version, yay.results?.[0]?.NumVotes);
+```
+
+```
+6 goneovim-git
+13.0.1-1 2646
+```
+
+That transcript is from a real run. `by` is typed to the fourteen values the
+document lists, so `by: "naem"` is a compile error rather than an empty result
+page, and both results are typed to the schemas the AUR publishes.
+
+**6. Make it yours.** Set `name`, `description` and `repository` in
+`package.json`, delete `src/resources/example.ts` along with its exports in
+`index.ts`, add tests under `tests/` as `*.test.ts`, then `npm test` and
+`npm run build` before publishing.
+
+Pointing this at your own API is step 2 with a different URL, or a path to a
+file. An API that publishes no OpenAPI document works the same way by hand:
+delete `tools/` and `dungbeetle.config.ts`, and follow
+[Writing a wrapper](#writing-a-wrapper), which drops three devDependencies with
 it.
 
 ## The boundary
@@ -272,7 +354,7 @@ imports nothing from `src/` beyond the `HttpMethod` type. A project wrapping an
 API that publishes no OpenAPI document can delete the directory and lose
 nothing.
 
-Point `dungbeetle.config.ts` at your document and run it:
+[Quick start](#quick-start) runs it against a real document. The full config:
 
 ```ts
 // dungbeetle.config.ts
@@ -281,16 +363,23 @@ import type { GeneratorConfig } from "./tools/generator/config.js";
 const config: GeneratorConfig = {
 	spec: "./openapi.yaml",
 
+	// Names the path rules read badly, and endpoints that would collide.
+	names: { "GET /v1/accounts/{account}": "getAccountById" },
+
 	// For a document behind a private URL. Reading the environment here is
 	// fine: this file runs at build time and never ships.
 	specHeaders: [{ name: "authorization", value: `Bearer ${process.env.SCHEMA_TOKEN}` }],
+
+	// Set when the runtime is a package you depend on rather than the `src/`
+	// next door, which makes generated modules import from it instead.
+	runtimeImport: "@acme/api-runtime",
 };
 
 export default config;
 ```
 
 ```sh
-npm run generate            # write the modules
+npm run generate                # write the modules
 npm run generate -- --dry-run   # report what would change and write nothing
 ```
 
