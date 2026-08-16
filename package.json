@@ -1,0 +1,59 @@
+{
+	"name": "@Smiduweorc/AphidTemplate",
+	"version": "0.0.0",
+	"description": "TypeScript skeleton for typed API wrappers: describe endpoints, send them through an injected transport.",
+	"type": "module",
+	"sideEffects": false,
+	"main": "dist/index.js",
+	"types": "dist/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/types/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"test": "node --import tsx --test \"tests/**/*.test.ts\"",
+		"test:dist": "npm run build && node --test \"tests/dist/*.test.js\"",
+		"docs": "typedoc",
+		"changelog": "git-cliff -o CHANGELOG.md",
+		"prepare": "lefthook install"
+	},
+	"keywords": [
+		"typescript",
+		"esm",
+		"template",
+		"api",
+		"api-client",
+		"sdk"
+	],
+	"author": "",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Smiduweorc/Aphid-template"
+	},
+	"devDependencies": {
+		"@commitlint/cli": "^21.2.2",
+		"@commitlint/config-conventional": "^21.2.2",
+		"@eslint/js": "^10.0.1",
+		"@types/node": "^26.2.0",
+		"eslint": "^10.8.1",
+		"git-cliff": "^2.13.1",
+		"lefthook": "^2.1.10",
+		"tsx": "^4.23.12",
+		"typedoc": "^0.28.20",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.67.0"
+	}
+}
