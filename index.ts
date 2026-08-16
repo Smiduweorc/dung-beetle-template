@@ -22,6 +22,10 @@ export type {
 
 export { readJson } from "./src/decode.js";
 
+// Query serialisations `buildUrl` does not produce on its own, for the
+// endpoints whose documents ask for them.
+export { deepObject, joined } from "./src/query.js";
+
 export {
 	ApiError,
 	DecodeError,
@@ -41,3 +45,25 @@ export type {
 	ListExamplesQuery,
 	NewExample,
 } from "./src/resources/example.js";
+
+// Everything between the markers below belongs to the generator. Edits inside
+// them are overwritten on the next run; everything above is yours.
+// dung-beetle:start generated exports
+export {
+	createUser,
+	deleteUser,
+	getUser,
+	listUserSessions,
+	listUsers,
+} from "./src/resources/users.js";
+
+export type {
+	CreateUserQuery,
+	CreateUserResponse,
+	ListUserSessionsResponse,
+	ListUsersQuery,
+	ListUsersResponse,
+	NewUser,
+	User,
+} from "./src/resources/users.js";
+// dung-beetle:end
