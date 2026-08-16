@@ -2,7 +2,9 @@
 # published tarball to dist/.
 /src
 /tests
+/tools
 /index.ts
+dungbeetle.config.ts
 /docs
 node_modules
 eslint*

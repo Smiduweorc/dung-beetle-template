@@ -3,7 +3,10 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
 	{
-		ignores: ["dist/**", "docs/**", "node_modules/**"],
+		// `src/schema.ts` is openapi-typescript's output, written in its style and
+		// never edited by hand. The generated resource modules are linted, since
+		// matching this project's style is the point of generating them.
+		ignores: ["dist/**", "docs/**", "node_modules/**", "src/schema.ts"],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
