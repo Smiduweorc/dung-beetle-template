@@ -1,5 +1,7 @@
 # @Smiduweorc/AphidTemplate
 
+![logo](./assets/logo.jpeg)
+
 A TypeScript skeleton for wrapping an HTTP API: you describe each endpoint as a
 typed value, and a client turns that description into a request, sends it
 through a transport you supply, and decodes the response.
