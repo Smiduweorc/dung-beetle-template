@@ -1,0 +1,38 @@
+name: Corpus
+
+# Generates from Stripe and the GitHub REST API, which are too large to keep in
+# the repository. Kept out of the pull request checks on purpose: it fetches
+# documents from the internet, so a network failure or an upstream edit would
+# block work that has nothing to do with it. `npm test` covers the two small
+# documents that are checked in.
+
+on:
+  schedule:
+    # Mondays, early, so a document that changed over the week is caught before
+    # anyone builds on top of it.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: Generate from the large public documents
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate and typecheck
+        run: npm run corpus

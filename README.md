@@ -1,13 +1,58 @@
-# @Smiduweorc/AphidTemplate
+# @smiduweorc/dung-beetle-template
 
 ![logo](./assets/logo.jpeg)
 
-A TypeScript skeleton for wrapping an HTTP API: you describe each endpoint as a
+A TypeScript skeleton for building and publishing your own typed API client.
+Point it at an API's OpenAPI document and it writes the client: one readable
+function per endpoint, which you review, commit and publish under your own
+name.
+
+Underneath is a small runtime you also own. An endpoint is described as a
 typed value, and a client turns that description into a request, sends it
 through a transport you supply, and decodes the response.
 
 > Publishing and deployment are handled manually (custom npm settings), so no
 > release/publish workflow is included here.
+
+## What it does, and who installs what
+
+The generator in `tools/` is build-time scaffolding, the way a bundler or a
+test runner is. It stays in your repository and is never published.
+
+- **You** copy this template, run `npm run generate` against the API's
+  document, review the diff, and publish `@acme/api-client`.
+- **Your users** run `npm i @acme/api-client` and import `listInvoices`. They
+  never install this template, and they install nothing else with yours: the
+  parser and the type generator are devDependencies here that never leave your
+  machine.
+
+Installing this package itself as a dependency gives you the runtime
+(`ApiClient`, `Operation`, the error types, the query builders) and nothing
+that generates, so there is no `npx dung-beetle` to run.
+
+When the API changes, re-run the generator, read the diff, and cut a version.
+It prints the public names it added and removed, so a change to your package's
+API is something a person sees in review rather than something that lands
+unannounced.
+
+## Getting started
+
+1. Copy this directory into a new repository, run `git init` if needed, then
+   `npm install`, which also installs the git hooks via the `prepare` script.
+2. Make it yours in `package.json`: `name`, `description`, `repository`,
+   `keywords`. That name is what your users will install.
+3. Point `spec` in `dungbeetle.config.ts` at the API's OpenAPI document and run
+   `npm run generate`. Read what lands in `src/resources/`, and settle any name
+   collisions it reports through the `names` map in the same file.
+4. Delete what the template ships as examples: `src/resources/example.ts` and
+   the generated `src/resources/users.ts`, with their exports in `index.ts` and
+   their entries in `tests/dist/public-api.test.js`.
+5. Add tests under `tests/` as `*.test.ts`, then `npm test` and `npm run build`.
+
+An API that publishes no OpenAPI document works the same way by hand: skip
+step 3, delete `tools/` and `dungbeetle.config.ts`, and follow
+[Writing a wrapper](#writing-a-wrapper). That drops three devDependencies with
+it.
 
 ## The boundary
 
@@ -23,7 +68,8 @@ replace it.
 
 - The URL: joining paths onto a base, escaping path parameters, serialising
   query values, and translating TypeScript-side parameter names into the API's
-  wire names.
+  wire names. `deepObject` and `joined` build the query shapes a repeated key
+  cannot express, such as Stripe's `created[gte]=`.
 - The request: method, headers, body, and which of them belong to the client,
   the endpoint, or the call.
 - The types: one named type per request and response shape the API documents.
@@ -45,22 +91,25 @@ replace it.
 | Reading configuration from the environment | An import that reads `process.env` breaks in browsers and bundlers, and makes the package untestable without mutating globals. | The consumer, who passes a `baseUrl` and headers to the constructor. |
 | Work at import time | Importing this package opens no connection and schedules no work, so a consumer can import it in a test harness or a cold start without paying for it. | A constructor call. |
 
-## Install and use
+## What your users see
+
+The package you publish, with the functions the generator wrote from the API's
+document:
 
 ```sh
-npm install @Smiduweorc/AphidTemplate
+npm install @acme/api-client
 ```
 
 ```ts
-import { ApiClient, HttpError, listExamples } from "@Smiduweorc/AphidTemplate";
+import { ApiClient, HttpError, listInvoices } from "@acme/api-client";
 
 const api = new ApiClient({
-	baseUrl: "https://api.example.com/v1",
+	baseUrl: "https://api.acme.com/v1",
 	headers: { authorization: `Bearer ${token}` },
 });
 
 try {
-	const page = await api.request(listExamples({ perPage: 50 }));
+	const page = await api.request(listInvoices({ perPage: 50 }));
 	console.log(page.data, page.meta.total);
 } catch (error) {
 	if (error instanceof HttpError && error.status === 404) {
@@ -70,6 +119,10 @@ try {
 }
 ```
 
+`listInvoices` stands in for whatever your document describes. The template
+ships `listExamples` in `src/resources/example.ts` as a worked equivalent to
+read, and `listUsers` in `src/resources/users.ts` as a generated one.
+
 ## Writing a wrapper
 
 ### Operations and the client
@@ -78,7 +131,7 @@ An operation is a plain object. Building one touches nothing, which is what
 makes the request side testable without a network:
 
 ```ts
-import type { Operation } from "@Smiduweorc/AphidTemplate";
+import type { Operation } from "@smiduweorc/dung-beetle-template";
 
 export function getUser(id: string): Operation<User> {
 	return {
@@ -132,6 +185,34 @@ export function deleteUser(id: string): Operation<void> {
 }
 ```
 
+### Query shapes a repeated key cannot express
+
+`ApiClient` sends an array as one repeated key, which is what OpenAPI's default
+(`style: form`, `explode: true`) means. Two helpers build the rest, for the
+endpoints whose documents ask for them:
+
+```ts
+import { deepObject, joined } from "@smiduweorc/dung-beetle-template";
+
+export function listCharges(query: ListChargesQuery = {}): Operation<ChargeList> {
+	return {
+		method: "GET",
+		path: "/charges",
+		query: {
+			limit: query.limit,
+			tag: joined(query.tags, ","),                   // tag=a,b
+			...deepObject("created", query.created),        // created[gte]=1
+		},
+	};
+}
+```
+
+`joined` covers a parameter the document does not explode, with the separator
+its style names. `deepObject` spreads a filter into bracketed keys, nesting as
+far as the value does and indexing arrays. Generated code uses both wherever
+the document calls for them, so this is only something to reach for in a
+hand-written resource.
+
 ### Errors
 
 Every failure this package raises is an `ApiError`. Catch the base class to
@@ -184,22 +265,139 @@ Authentication is a header, so a static key or token goes in the client's
 `headers`. A credential that has to be refreshed belongs in a transport
 decorator, which can set the header per attempt.
 
-## Getting started from this template
+## Generating from OpenAPI
 
-1. Copy this directory, run `git init` (if needed), then `npm install`, which
-   also installs the git hooks via the `prepare` script.
-2. Update `package.json` (`name`, `description`, `repository`, `keywords`).
-3. Replace `src/resources/example.ts` with your first resource, then update the
-   exports in `index.ts` and the `publicSurface` list in
-   `tests/dist/public-api.test.js`, which records what the package exports.
-4. Add tests under `tests/` as `*.test.ts`.
+The generator lives in `tools/`, stays out of the published tarball, and
+imports nothing from `src/` beyond the `HttpMethod` type. A project wrapping an
+API that publishes no OpenAPI document can delete the directory and lose
+nothing.
+
+Point `dungbeetle.config.ts` at your document and run it:
+
+```ts
+// dungbeetle.config.ts
+import type { GeneratorConfig } from "./tools/generator/config.js";
+
+const config: GeneratorConfig = {
+	spec: "./openapi.yaml",
+
+	// For a document behind a private URL. Reading the environment here is
+	// fine: this file runs at build time and never ships.
+	specHeaders: [{ name: "authorization", value: `Bearer ${process.env.SCHEMA_TOKEN}` }],
+};
+
+export default config;
+```
+
+```sh
+npm run generate            # write the modules
+npm run generate -- --dry-run   # report what would change and write nothing
+```
+
+It writes four things:
+
+- `src/resources/<noun>.ts`, one module per first path segment, each carrying a
+  banner. A file in that directory without the banner is never touched, so
+  hand-written resources sit safely beside generated ones.
+- `src/schema.ts`, every type the document declares, written by
+  [`openapi-typescript`](https://openapi-ts.dev). Nobody edits it; resource
+  modules alias into it, so `components["schemas"]["User"]` becomes `User`.
+- The export block in `index.ts`, inside `dung-beetle:start` markers.
+- The generated half of the surface list in `tests/dist/public-api.test.js`,
+  inside the same markers. Every run prints the public names it added and
+  removed, so the semver call still happens in review.
+
+### The names
+
+Function names come from the method and the path, never from `operationId`:
+real documents emit `read_user_users__user_id__get` and
+`agents/get-repo-public-key`.
+
+| Request | Function |
+| --- | --- |
+| `GET /users` | `listUsers(query)` |
+| `GET /users/{id}` | `getUser(id)` |
+| `POST /users` | `createUser(input)` |
+| `PUT /users/{id}` | `replaceUser(id, input)` |
+| `PATCH /users/{id}` | `updateUser(id, patch)` |
+| `DELETE /users/{id}` | `deleteUser(id)` |
+| `GET /users/{id}/sessions` | `listUserSessions(id, query)` |
+| `POST /users/{id}/activate` | `activateUser(id)` |
+
+Three rules come from the document rather than from English, because English
+alone gets them wrong: a path with items under it is a collection whatever its
+noun looks like (`/codes_of_conduct` beside `/codes_of_conduct/{key}` is
+`listCodesOfConduct`), a trailing parameter that qualifies an item joins the
+name (`/gists/{gist_id}/{sha}` is `getGistBySha`), and a version prefix names
+nothing (`/v1/payment_intents` is `listPaymentIntents` in `payment-intents.ts`).
+`POST` on a single item reads as an update, which is what APIs that write with
+`POST` mean.
+
+Where two endpoints still want one name, the run stops and prints every
+collision at once with a block to paste under `names` in the config. That
+happens 5 times in Stripe's 589 endpoints and 27 times in GitHub's 1220.
+
+### What it refuses, rather than guessing
+
+- Anything that is not OpenAPI 3.0 or 3.1, Swagger 2.0 included.
+- A document whose paths, parameters, responses or security schemes break the
+  OpenAPI structure, or a `$ref` that does not resolve anywhere in it. Every
+  problem is reported together in one `SpecProblemsError`. Structural
+  complaints about a schema are left alone, because `openapi-typescript` reads
+  schemas and is more forgiving than the letter of the specification: Stripe's
+  document raises 618 of them (`nullable` with no `type`) and generates fine.
+- A `trace` endpoint, because `HttpMethod` has no TRACE.
+- A path parameter the document never declares, because its type is unknown.
+- Overwriting a file it did not write.
+
+### What it leaves out, and says so in the code
+
+- Webhooks and callbacks, which describe calls arriving rather than calls a
+  wrapper makes, and error responses, which arrive as an `HttpError` carrying
+  the raw body.
+- Every request media type but one where an endpoint offers several, JSON
+  first. A body that is not JSON is taken as a `RequestBody` the caller builds,
+  since a form or multipart encoding cannot be derived from a schema safely.
+- Nothing for `matrix` or `label` query parameters, which describe path
+  segments rather than query strings. Those properties are narrowed to the
+  forms this client can send, and the function's documentation names them.
+  Everything else the document asks for is built: a non-exploded array through
+  `joined`, and a `deepObject` filter through `deepObject`, which is how
+  Stripe's 352 filter parameters reach the URL as `created[gte]=`.
+- Authentication. Each function's `@security` line says which scheme applies
+  and exactly where the credential goes, including "None" where an endpoint
+  overrides the document's requirement. No auth code is generated, because a
+  credential is a header and headers already reach the client.
+
+### What it has been run against
+
+`npm test` generates from the fixtures and from the two real documents in
+`tests/generator/corpus/`, compiles each result against the real `Operation`
+with `tsc`, and checks that the modules checked into `src/` still match their
+document. `npm run corpus` does the same for the two large documents, which it
+fetches because they are too big to keep here; a scheduled workflow runs it
+weekly, and it is kept out of the pull request checks so that a network failure
+never blocks unrelated work.
+
+| Document | Endpoints | Modules | Names to settle | Where |
+| --- | --- | --- | --- | --- |
+| Swagger petstore | 19 | 3 | 0 | `npm test` |
+| Redocly museum (3.1) | 8 | 3 | 0 | `npm test` |
+| Stripe | 589 | 76 | 5 | `npm run corpus` |
+| GitHub REST | 1220 | 37 | 27 | `npm run corpus` |
+
+Both failures worth having so far came from those documents rather than from
+the fixtures: rejecting Stripe outright over 618 schema nits, and emitting
+Stripe query filters that would not compile.
 
 ## Scripts
 
 | Script | What it does |
 | --- | --- |
 | `npm run build` | Compile `src/` + `index.ts` to `dist/` with type declarations. |
-| `npm run typecheck` | Type-check the sources and the tests without emitting. |
+| `npm run typecheck` | Type-check the package, the generator and the tests without emitting. |
+| `npm run generate` | Write resource modules from the document named in `dungbeetle.config.ts`. |
+| `npm run corpus` | Fetch Stripe and the GitHub REST API, generate from both, and typecheck the result. |
 | `npm run lint` | Run ESLint. |
 | `npm run lint:fix` | Run ESLint and auto-fix what it can. |
 | `npm test` | Run the test suite against the sources with the Node test runner via `tsx`. |
@@ -215,14 +413,39 @@ decorator, which can set the header per attempt.
 ├── src/
 │   ├── client.ts               # ApiClient, ApiClientOptions, Transport
 │   ├── operation.ts            # Operation and its parameter types
+│   ├── query.ts                # deepObject and joined, for query shapes buildUrl cannot build
+│   ├── schema.ts               # generated: every type the document declares
 │   ├── errors.ts               # ApiError and its three subclasses
 │   ├── decode.ts               # readJson
 │   ├── url.ts                  # internal URL and query building
 │   └── resources/
-│       └── example.ts          # one worked resource; copy it, then delete it
+│       ├── example.ts          # one worked resource; copy it, then delete it
+│       └── users.ts            # generated from the fixture document; delete it too
+├── dungbeetle.config.ts        # which document to read, and any names to override
+├── tools/
+│   ├── compile.ts              # writes generated modules into a throwaway project and runs tsc
+│   ├── corpus.ts               # npm run corpus
+│   └── generator/
+│       ├── cli.ts              # npm run generate
+│       ├── config.ts           # the config file's shape
+│       ├── document.ts         # load(): OpenAPI document to NormalizedDocument
+│       ├── model.ts            # the model the rest of the generator reads
+│       ├── names.ts            # method and path to function and file names
+│       ├── plan.ts             # every name settled before anything is written
+│       ├── emit.ts             # the resource module source
+│       ├── schema.ts           # src/schema.ts via openapi-typescript
+│       └── surface.ts          # the managed regions in index.ts and the surface list
 ├── tests/
 │   ├── client.test.ts
 │   ├── example.test.ts
+│   ├── generator/
+│   │   ├── document.test.ts
+│   │   ├── names.test.ts
+│   │   ├── emit.test.ts
+│   │   ├── cli.test.ts
+│   │   ├── corpus.test.ts
+│   │   ├── corpus/             # two real documents, with where they came from
+│   │   └── fixtures/           # documents covering what the generator has to get right
 │   ├── dist/
 │   │   └── public-api.test.js  # consumes the build output (npm run test:dist)
 │   └── tsconfig.json
@@ -238,6 +461,7 @@ decorator, which can set the header per attempt.
 └── .github/
     ├── ISSUE_TEMPLATE/         # bug report + feature request
     ├── workflows/ci.yml
+    ├── workflows/corpus.yml    # weekly run against the large public documents
     └── dependabot.yml
 ```
 
@@ -249,6 +473,12 @@ decorator, which can set the header per attempt.
 - **Runtime**: needs `fetch`, `Request`, `Response`, `Headers` and `URL` as
   globals. It imports no `node:` built-ins and reads no `process`. CI runs Node
   22 and 24 on Linux, macOS and Windows; `engines` records that floor.
+- **Dependencies**: none at runtime. `@redocly/openapi-core`,
+  `openapi-typescript` and `pluralize` are devDependencies the generator uses,
+  and `tools/` is not published, so installing this package installs nothing
+  else. `openapi-typescript` declares a peer of TypeScript 5 and this project
+  is on 6, which an `overrides` entry in `package.json` settles; it runs
+  correctly on 6.
 - **Testing**: Node's built-in test runner (`node:test` / `node:assert`) run
   against TypeScript via [`tsx`](https://tsx.is), plus a JavaScript suite under
   `tests/dist/` that imports the build output.
@@ -267,10 +497,11 @@ decorator, which can set the header per attempt.
   copied the directory.
 - **Dependabot**: daily npm + GitHub Actions update PRs.
 
-## Publishing (manual)
+## Publishing your client (manual)
 
 Only `dist/` is published (`"files": ["dist"]` in `package.json`, with
-`.npmignore` as a backstop). Build first, then publish with your custom npm
+`.npmignore` as a backstop), so `tools/`, your document and the generator's
+configuration all stay behind. Build first, then publish with your custom npm
 settings:
 
 ```sh
