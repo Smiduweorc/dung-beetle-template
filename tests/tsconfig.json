@@ -8,7 +8,8 @@
 	"include": [
 		"./**/*.ts",
 		"../index.ts",
-		"../src/**/*.ts"
+		"../src/**/*.ts",
+		"../tools/**/*.ts"
 	],
 	"exclude": [
 		"../node_modules",

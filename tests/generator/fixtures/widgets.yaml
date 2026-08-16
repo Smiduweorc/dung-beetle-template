@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: Widgets API
+  version: "1.0"
+paths:
+  /widgets:
+    get:
+      parameters:
+        - name: cursor
+          in: query
+          required: true
+          schema: { type: string }
+        - name: created
+          in: query
+          style: deepObject
+          explode: true
+          schema:
+            anyOf:
+              - type: integer
+              - type: object
+                properties:
+                  gte: { type: integer }
+                  lte: { type: integer }
+      responses:
+        "200":
+          description: A page of widgets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Widget" }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/Widget" }
+      responses:
+        "201":
+          description: Made one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Widget" }
+  /widgets/{widget_id}:
+    patch:
+      parameters:
+        - name: widget_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "200":
+          description: Changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Widget" }
+  /widgets/{widget_id}/activate:
+    post:
+      parameters:
+        - name: widget_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Done. }
+  /widgets/{widget_id}/archive/{archive_id}.{format}:
+    get:
+      parameters:
+        - name: widget_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: archive_id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: format
+          in: path
+          required: true
+          schema: { type: string, enum: [zip, tar] }
+      responses:
+        "302": { description: Off to storage. }
+  /gadgets/{gadget_id}:
+    get:
+      parameters:
+        - name: gadget_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: One gadget, which carries a widget.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Widget" }
+components:
+  schemas:
+    Widget:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        name: { type: string }

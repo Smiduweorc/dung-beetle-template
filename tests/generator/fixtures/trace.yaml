@@ -1,0 +1,10 @@
+openapi: 3.0.3
+info:
+  title: Tracing API
+  version: "1.0"
+paths:
+  /echo:
+    trace:
+      responses:
+        "200":
+          description: Echoed back.

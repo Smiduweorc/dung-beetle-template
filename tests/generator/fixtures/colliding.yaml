@@ -1,0 +1,22 @@
+openapi: 3.0.3
+info:
+  title: Colliding API
+  version: "1.0"
+paths:
+  /things/{thing_id}:
+    post:
+      parameters:
+        - name: thing_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Changed. }
+    patch:
+      parameters:
+        - name: thing_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Changed. }

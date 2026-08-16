@@ -1,0 +1,166 @@
+openapi: 3.0.3
+info:
+  title: Users API
+  version: "2026-08-01"
+  description: The parts of a document the generator has to read correctly.
+servers:
+  - url: https://{tenant}.api.example.com/v1
+    description: Production.
+    variables:
+      tenant:
+        default: acme
+  - url: https://admin:hunter2@staging.api.example.com/v1
+    description: Staging, with credentials the generator must not repeat.
+security:
+  - ApiKey: []
+paths:
+  /users:
+    parameters:
+      - name: page
+        in: query
+        description: One-based page of results.
+        schema: { type: integer }
+      - name: x-request-id
+        in: header
+        schema: { type: string }
+      - name: Accept
+        in: header
+        schema: { type: string }
+    get:
+      operationId: read_users_users__get
+      summary: List users.
+      parameters:
+        - name: page
+          in: query
+          description: One-based page of results.
+          deprecated: true
+          schema: { type: integer }
+        - $ref: "#/components/parameters/PerPage"
+        - name: tag
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { type: string }
+      responses:
+        "200":
+          description: One page of users.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/User" }
+    post:
+      operationId: create_user_users__post
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema: { type: string }
+          application/json:
+            schema: { $ref: "./new-user.yaml" }
+      responses:
+        "202":
+          description: Queued for creation.
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+  /users/{user_id}:
+    get:
+      operationId: read_user_users__user_id__get
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/User"
+    delete:
+      operationId: delete_user_users__user_id__delete
+      deprecated: true
+      security: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted.
+        "404":
+          description: No such user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /users/{user_id}/sessions:
+    get:
+      operationId: list_sessions
+      parameters:
+        - name: user_id
+          in: path
+          schema: { type: string }
+        - name: session_hint
+          in: cookie
+          schema: { type: string }
+      responses:
+        "2XX":
+          description: Anything else that worked.
+        "200":
+          description: The user's sessions.
+          content:
+            application/vnd.example+json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Session" }
+components:
+  parameters:
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer }
+  responses:
+    User:
+      description: One user.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/User" }
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Session:
+      type: object
+      properties:
+        id: { type: string }
+    Problem:
+      type: object
+      properties:
+        detail: { type: string }
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: query
+      name: api_key
+      description: Sent as a query parameter, which no client header can carry.
+    Bearer:
+      type: http
+      scheme: Bearer
+      bearerFormat: JWT
+    OAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/authorize
+          tokenUrl: https://auth.example.com/token
+          refreshUrl: https://auth.example.com/refresh
+          scopes:
+            users:read: Read users.
