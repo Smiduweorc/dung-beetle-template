@@ -322,30 +322,73 @@ package excludes goes in a wrapper around that function, where it applies to
 every call and stays under the consumer's control:
 
 ```ts
-const withRetry = (inner: Transport, attempts: number): Transport =>
-	async (request) => {
-		for (let attempt = 1; ; attempt += 1) {
-			try {
-				return await inner(request);
-			} catch (error) {
-				if (attempt >= attempts) throw error;
-				await sleep(2 ** attempt * 100);
-			}
-		}
-	};
+const withLogging = (inner: Transport): Transport => async (request) => {
+	const started = performance.now();
+	const response = await inner(request);
+	console.log(request.method, request.url, response.status, performance.now() - started);
+
+	return response;
+};
 
 const api = new ApiClient({
-	baseUrl: "https://api.example.com/v1",
-	transport: withRetry(fetch, 3),
+	baseUrl: "https://api.acme.com/v1",
+	transport: withLogging(fetch),
 });
 ```
 
-A transport that retries a request with a body must clone it first: a `Request`
-body can only be read once.
+Logging stays yours because everyone wants a different shape, and because a
+library that writes to stdout has taken something that belongs to the
+application. A hand-written decorator that retries a request with a body must
+clone it first: a `Request` body reads once.
 
-Authentication is a header, so a static key or token goes in the client's
-`headers`. A credential that has to be refreshed belongs in a transport
-decorator, which can set the header per attempt.
+### The decorators that ship
+
+Two of the excluded behaviours are written anyway, under the `/transport`
+subpath, because they are the two people rewrite and get subtly wrong.
+Importing the package costs nothing unless you import the subpath, and
+`ApiClient` is untouched either way: a decorator is a `Transport` wrapped
+around another, which you construct and pass in.
+
+```ts
+import { ApiClient } from "@acme/api-client";
+import { withBearerToken, withRetry } from "@acme/api-client/transport";
+
+const api = new ApiClient({
+	baseUrl: "https://api.acme.com/v1",
+	transport: withRetry(withBearerToken(fetch, () => tokens.current())),
+});
+```
+
+**`withBearerToken(inner, getToken)`** sends `authorization: Bearer <token>` on
+every request and asks your function for the value each time, so caching and
+expiry stay yours. Concurrent requests share one call to it: ten requests
+arriving on an expired token ask for one token rather than ten. The shared
+promise is dropped as soon as it settles, so the next request asks again. Your
+function returns the token rather than the header value, and a rejection
+reaches the caller as a `TransportError` having cached nothing.
+
+A static key or token needs none of that. Put it in the client's `headers` and
+it is sent with every request.
+
+**`withRetry(inner, options)`** sends a request again when it failed in a way
+that might not fail twice: a rejected transport, or a 408, 425, 429, 500, 502,
+503 or 504. Waits double from 200ms to a 5s ceiling and are jittered across the
+whole window, so a fleet that failed together does not come back together. A
+`Retry-After` is honoured, and one asking for longer than `maxDelay` ends the
+retrying rather than arriving early.
+
+It leaves two things alone. A request the caller aborted, because that failure
+is the caller's own doing. And `POST` and `PATCH`, because a `POST` that was
+received and answered into a dropped connection has already happened, and
+sending it again charges the card twice. An API that takes idempotency keys
+opts its writes in with `methods: ["POST"]`.
+
+Every attempt sends its own clone, since a `Request` body reads once. Ordering
+matters in one way: `withRetry(withBearerToken(...))`, as above, asks for a
+token per attempt, so a retry after an expiry carries a fresh one.
+
+A copy of this template that wants neither deletes `src/transport/`, the same
+way it deletes `src/resources/example.ts`.
 
 ## Generating from OpenAPI
 
@@ -392,8 +435,9 @@ It writes four things:
   [`openapi-typescript`](https://openapi-ts.dev). Nobody edits it; resource
   modules alias into it, so `components["schemas"]["User"]` becomes `User`.
 - The export block in `index.ts`, inside `dung-beetle:start` markers.
-- The generated half of the surface list in `tests/dist/public-api.test.js`,
-  inside the same markers. Every run prints the public names it added and
+- `tests/dist/generated-surface.js`, the list of names the built-artifact test
+  checks the package against. It is a file of its own so the generator never
+  edits a test someone wrote. Every run prints the public names it added and
   removed, so the semver call still happens in review.
 
 ### The names
@@ -453,10 +497,12 @@ happens 5 times in Stripe's 589 endpoints and 27 times in GitHub's 1220.
   Everything else the document asks for is built: a non-exploded array through
   `joined`, and a `deepObject` filter through `deepObject`, which is how
   Stripe's 352 filter parameters reach the URL as `created[gte]=`.
-- Authentication. Each function's `@security` line says which scheme applies
-  and exactly where the credential goes, including "None" where an endpoint
-  overrides the document's requirement. No auth code is generated, because a
-  credential is a header and headers already reach the client.
+- Authentication code. Each function's `@security` line says which scheme
+  applies and exactly where the credential goes, including "None" where an
+  endpoint overrides the document's requirement, and the notes below say it
+  once for the whole API. Nothing executable is generated for it: a credential
+  is a header, and headers already reach the client. Where a token expires,
+  those notes point at `withBearerToken` from the `/transport` subpath.
 
 ### What it has been run against
 
@@ -503,6 +549,10 @@ Stripe query filters that would not compile.
 │   ├── client.ts               # ApiClient, ApiClientOptions, Transport
 │   ├── operation.ts            # Operation and its parameter types
 │   ├── query.ts                # deepObject and joined, for query shapes buildUrl cannot build
+│   ├── transport/
+│   │   ├── index.ts            # the <package>/transport subpath
+│   │   ├── bearer.ts           # withBearerToken
+│   │   └── retry.ts            # withRetry
 │   ├── schema.ts               # generated: every type the document declares
 │   ├── errors.ts               # ApiError and its three subclasses
 │   ├── decode.ts               # readJson
@@ -522,6 +572,7 @@ Stripe query filters that would not compile.
 │       ├── names.ts            # method and path to function and file names
 │       ├── plan.ts             # every name settled before anything is written
 │       ├── emit.ts             # the resource module source
+│       ├── security.ts         # the authentication notes for the README
 │       ├── schema.ts           # src/schema.ts via openapi-typescript
 │       └── surface.ts          # the managed regions in index.ts and the surface list
 ├── tests/
@@ -536,7 +587,8 @@ Stripe query filters that would not compile.
 │   │   ├── corpus/             # two real documents, with where they came from
 │   │   └── fixtures/           # documents covering what the generator has to get right
 │   ├── dist/
-│   │   └── public-api.test.js  # consumes the build output (npm run test:dist)
+│   │   ├── public-api.test.js  # consumes the build output (npm run test:dist)
+│   │   └── generated-surface.js # generated: the names that test checks against
 │   └── tsconfig.json
 ├── eslint.config.mjs
 ├── tsconfig.json
@@ -585,6 +637,34 @@ Stripe query filters that would not compile.
   on `npm install`, which needs a git repository, so run `git init` first if you
   copied the directory.
 - **Dependabot**: daily npm + GitHub Actions update PRs.
+
+## Authentication
+
+Where the document declares security schemes, the generator writes what each
+one is and exactly where its credential goes, between the markers below. It
+writes them only where the markers already are, since a README is prose you
+own. Put them wherever the section belongs, or delete them and lose nothing
+else.
+
+<!-- dung-beetle:start generated authentication notes -->
+Written from Users API's own document. No credential handling is
+generated: a credential is a header, so it reaches the API through
+`ApiClient`'s `headers`, or through `RequestOptions.headers` per call. Each
+generated function repeats the schemes that apply to it on its `@security`
+line.
+
+Every endpoint requires `ApiKey` unless it says otherwise.
+
+| Scheme | Kind | Where the credential goes |
+| --- | --- | --- |
+| `ApiKey` | `apiKey` in query | Query parameter `api_key` |
+| `Bearer` | `http`, bearer (JWT) | Header `authorization: Bearer <token>` |
+| `OAuth` | `oauth2` | Header `authorization: Bearer <token>` |
+
+**`ApiKey`** Sent as a query parameter, which no client header can carry. `ApiClient` sends no query of its own, so a transport decorator has to append `api_key` to the request URL.
+
+**`OAuth`** Authorization code flow: authorize at https://auth.example.com/authorize, take a token from https://auth.example.com/token and refresh at https://auth.example.com/refresh. Scopes: `users:read`. A token that expires goes through `withBearerToken` from the `/transport` subpath, which asks for a new one and shares that call between concurrent requests.
+<!-- dung-beetle:end -->
 
 ## Publishing your client (manual)
 
