@@ -6,6 +6,7 @@ import {
 	createExample,
 	getExample,
 	listExamples,
+	listUsers,
 	type Example,
 } from "../index.js";
 
@@ -78,4 +79,18 @@ test("createExample sends a JSON body and unwraps the envelope", async () => {
 		tags: ["x"],
 	});
 	assert.deepEqual(created, record);
+});
+
+test("a parameter the document never typed is still one you can send", () => {
+	// It arrives as `unknown`, which a plain `Extract` would narrow to `never`
+	// and make impossible to pass. This file is typechecked, so the call below
+	// failing to compile is the test failing.
+	const operation = listUsers({ filter: "anything", page: 2 });
+
+	assert.deepEqual(operation.query, {
+		page: 2,
+		per_page: undefined,
+		filter: "anything",
+		tag: undefined,
+	});
 });

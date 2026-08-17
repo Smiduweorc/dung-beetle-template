@@ -57,7 +57,7 @@ test("a path item's parameters come first, and the operation's own replace them"
 
 	assert.deepEqual(
 		list.queryParameters.map((parameter) => parameter.name),
-		["page", "per_page", "tag"]
+		["page", "per_page", "filter", "tag"]
 	);
 	assert.equal(list.queryParameters[0]?.deprecated, true);
 });

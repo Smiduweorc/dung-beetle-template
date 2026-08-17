@@ -7,6 +7,9 @@ import { access } from "node:fs/promises";
 import { test } from "node:test";
 
 import * as pkg from "../../dist/index.js";
+// Written by the generator, which never edits this file. Every name in it is a
+// name the package exports, so the two lists together are the public surface.
+import { generatedSurface } from "./generated-surface.js";
 
 // Update this list by hand: a name added or removed here is a change to the
 // package's public API, and semver applies to it.
@@ -24,18 +27,6 @@ const publicSurface = [
 	"readJson",
 ];
 
-// The generator rewrites the block below and prints what it added or removed,
-// so a generated change to the public API is still something a person reads in
-// review rather than something that lands unannounced.
-// dung-beetle:start generated public surface
-const generatedSurface = [
-	"createUser",
-	"deleteUser",
-	"getUser",
-	"listUserSessions",
-	"listUsers",
-];
-// dung-beetle:end
 
 test("the built entry point exports exactly the intended surface", () => {
 	assert.deepEqual(Object.keys(pkg).sort(), [...publicSurface, ...generatedSurface].sort());
@@ -68,4 +59,11 @@ test("errors thrown by the built artifact are catchable by type", async () => {
 	assert.ok(error instanceof pkg.HttpError);
 	assert.ok(error instanceof pkg.ApiError);
 	assert.equal(error.status, 500);
+});
+
+test("the transport subpath is published and exports its decorators", async () => {
+	const transport = await import("../../dist/src/transport/index.js");
+
+	assert.deepEqual(Object.keys(transport).sort(), ["withBearerToken", "withRetry"]);
+	await access(new URL("../../dist/types/src/transport/index.d.ts", import.meta.url));
 });

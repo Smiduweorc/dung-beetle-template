@@ -36,6 +36,10 @@ paths:
           deprecated: true
           schema: { type: integer }
         - $ref: "#/components/parameters/PerPage"
+        - name: filter
+          in: query
+          description: Whatever the API decides this means; the document does not say.
+          schema: {}
         - name: tag
           in: query
           style: form

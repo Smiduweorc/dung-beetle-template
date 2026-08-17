@@ -49,11 +49,7 @@ async function project(): Promise<string> {
 		"export { ApiClient } from \"./src/client.js\";\n",
 		"utf8"
 	);
-	await writeFile(
-		join(directory, "tests", "dist", "public-api.test.js"),
-		"const generatedSurface = [];\n",
-		"utf8"
-	);
+
 
 	return directory;
 }
@@ -132,8 +128,8 @@ test("a run writes the modules, the schema and both managed regions", async () =
 			/dung-beetle:start[\s\S]*listUsers[\s\S]*dung-beetle:end/u
 		);
 		assert.match(
-			await readFile(join(directory, "tests", "dist", "public-api.test.js"), "utf8"),
-			/const generatedSurface = \[\n\t"createUser",/u
+			await readFile(join(directory, "tests", "dist", "generated-surface.js"), "utf8"),
+			/export const generatedSurface = \[\n\t"createUser",/u
 		);
 
 		// The second run has nothing to say, which is what makes the first one
@@ -141,6 +137,37 @@ test("a run writes the modules, the schema and both managed regions", async () =
 		const again = run(["--config", config(directory)]);
 		assert.match(again.stderr, /users\.ts unchanged/u);
 		assert.match(again.stderr, /public names added: none/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a README gets the authentication notes only where it asks for them", async () => {
+	const directory = await project();
+	const readme = join(directory, "README.md");
+
+	try {
+		await writeFile(readme, "# Mine\n\nNo markers here.\n", "utf8");
+		const without = run(["--config", config(directory)]);
+
+		assert.match(without.stderr, /README\.md carries no markers/u);
+		assert.equal(await readFile(readme, "utf8"), "# Mine\n\nNo markers here.\n");
+
+		await writeFile(
+			readme,
+			"# Mine\n\n## Authentication\n\n<!-- dung-beetle:start notes -->\n<!-- dung-beetle:end -->\n",
+			"utf8"
+		);
+		const withMarkers = run(["--config", config(directory)]);
+
+		assert.match(withMarkers.stderr, /README\.md written/u);
+
+		const written = await readFile(readme, "utf8");
+		assert.match(written, /Every endpoint requires `ApiKey`/u);
+		assert.match(written, /Query parameter `api_key`/u);
+		// The markers themselves, and everything around them, are left alone.
+		assert.match(written, /^# Mine$/mu);
+		assert.match(written, /<!-- dung-beetle:start notes -->/u);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
