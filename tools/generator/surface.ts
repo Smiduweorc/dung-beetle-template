@@ -1,3 +1,4 @@
+import { BANNER_MARK } from "./emit.js";
 import { compare } from "./order.js";
 import type { Plan, PlannedModule } from "./plan.js";
 
@@ -16,8 +17,11 @@ export function posix(path: string): string {
 	return path.split(/[\\/]/u).join("/");
 }
 
-const START = "// dung-beetle:start";
-const END = "// dung-beetle:end";
+// A marker opens a line, after a comment token: `//` in TypeScript and
+// JavaScript, `<!--` in markdown. Anchoring to the start of the line is what
+// keeps prose that mentions `dung-beetle:start` from being read as one.
+const START = /^[ \t]*(?:\/\/|<!--)[ \t]*dung-beetle:start\b/u;
+const END = /^[ \t]*(?:\/\/|<!--)[ \t]*dung-beetle:end\b/u;
 
 /** Everything one module exports, sorted so a re-run gives a readable diff. */
 export function moduleExports(module: PlannedModule): {
@@ -65,45 +69,65 @@ function exportList(keyword: string, names: readonly string[], from: string): st
 	return [`${keyword} {`, ...names.map((name) => `\t${name},`), `} from ${from};`].join("\n");
 }
 
-/** The generated half of the surface list the built-artifact test compares against. */
-export function surfaceRegion(plan: Plan): string {
-	const names = generatedValues(plan);
-
+/**
+ * The module the built-artifact test reads its half of the surface list from.
+ *
+ * A whole file rather than a region inside the test, so the generator never
+ * edits a test someone wrote. The names still land in a diff, which is the
+ * point of keeping the list at all.
+ */
+export function surfaceModule(plan: Plan, spec: string): string {
 	return [
-		"const generatedSurface = [",
-		...names.map((name) => `\t${JSON.stringify(name)},`),
+		`// ${BANNER_MARK} from ${spec}. Do not edit.`,
+		"//",
+		"// Every value the generated modules export. The built-artifact test checks",
+		"// the package against this, so a name arriving or leaving is a change to the",
+		"// public API and shows up in review.",
+		"",
+		"export const generatedSurface = [",
+		...generatedValues(plan).map((name) => `\t${JSON.stringify(name)},`),
 		"];",
+		"",
 	].join("\n");
 }
 
-/** The names inside a file's marked region, which is what the last run wrote. */
-export function previousValues(source: string): readonly string[] {
-	const region = between(source);
+/** The names the last run wrote, for reporting what this one changed. */
+export function namesIn(source: string): readonly string[] {
+	return [...source.matchAll(/"([^"]+)"/gu)].map((match) => match[1] ?? "");
+}
 
-	return region === undefined ? [] : [...region.matchAll(/"([^"]+)"/gu)].map((match) => match[1] ?? "");
+/** Whether a file carries the markers, which is how a README opts in. */
+export function hasRegion(source: string): boolean {
+	return between(source) !== undefined;
 }
 
 /**
- * Replaces a file's marked region, adding one at the end if the file has none.
- * A file the generator has never touched keeps everything it already said.
+ * Replaces what sits between a file's markers, adding a region at the end if
+ * the file has none. Both marker lines are left exactly as written, so a
+ * markdown file keeps its `<!-- -->` and whatever note the author put there.
  */
 export function withRegion(source: string, content: string, note: string): string {
-	const marked = `${START} ${note}\n${content}\n${END}`;
-	const start = source.indexOf(START);
-	const end = source.indexOf(END);
+	const lines = source.split("\n");
+	const start = lines.findIndex((line) => START.test(line));
+	const end = lines.findIndex((line) => END.test(line));
 
 	if (start === -1 || end === -1 || end < start) {
-		return `${source.replace(/\n+$/u, "")}\n\n${marked}\n`;
+		return `${source.replace(/\n+$/u, "")}\n\n// dung-beetle:start ${note}\n${content}\n// dung-beetle:end\n`;
 	}
 
-	return `${source.slice(0, start)}${marked}${source.slice(end + END.length)}`;
+	return [
+		...lines.slice(0, start + 1),
+		...content.split("\n"),
+		...lines.slice(end),
+	].join("\n");
 }
 
 function between(source: string): string | undefined {
-	const start = source.indexOf(START);
-	const end = source.indexOf(END);
+	const lines = source.split("\n");
+	const start = lines.findIndex((line) => START.test(line));
+	const end = lines.findIndex((line) => END.test(line));
 
 	return start === -1 || end === -1 || end < start
 		? undefined
-		: source.slice(start + START.length, end);
+		: lines.slice(start + 1, end).join("\n");
 }

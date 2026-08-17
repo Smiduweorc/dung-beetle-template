@@ -7,12 +7,14 @@ import { load, SpecError } from "./document.js";
 import { BANNER_MARK, emitModule } from "./emit.js";
 import { plan, PlanError } from "./plan.js";
 import { emitSchema } from "./schema.js";
+import { securityNotes } from "./security.js";
 import {
 	exportsRegion,
 	generatedValues,
+	hasRegion,
+	namesIn,
 	posix,
-	previousValues,
-	surfaceRegion,
+	surfaceModule,
 	withRegion,
 } from "./surface.js";
 
@@ -36,7 +38,8 @@ alone, so hand-written resources can sit alongside generated ones.
 const RESOURCES = join("src", "resources");
 const SCHEMA = join("src", "schema.ts");
 const INDEX = "index.ts";
-const SURFACE = join("tests", "dist", "public-api.test.js");
+const SURFACE = join("tests", "dist", "generated-surface.js");
+const README = "README.md";
 
 function report(line: string): void {
 	process.stderr.write(`${line}\n`);
@@ -90,6 +93,7 @@ async function generate(configPath: string, dryRun: boolean): Promise<void> {
 
 	const files = new Map<string, string>([
 		[SCHEMA, await emitSchema(bundled, config.spec)],
+		[SURFACE, surfaceModule(planned, config.spec)],
 		...planned.modules.map(
 			(module): [string, string] => [
 				join(RESOURCES, `${module.name}.ts`),
@@ -102,6 +106,10 @@ async function generate(configPath: string, dryRun: boolean): Promise<void> {
 		),
 	]);
 
+	// Read before the loop below overwrites it, so the run can report what the
+	// package's public surface gained and lost.
+	const before = namesIn((await read(join(root, SURFACE))) ?? "");
+
 	await mkdir(join(root, RESOURCES), { recursive: true });
 
 	for (const [file, content] of files) {
@@ -110,7 +118,7 @@ async function generate(configPath: string, dryRun: boolean): Promise<void> {
 
 		if (existing !== undefined && !existing.includes(BANNER_MARK)) {
 			throw new PlanError(
-				`${file} exists and was not written by this generator. Move it aside or rename the resource with the \`names\` map before generating again.`
+				`${file} exists and was not written by this generator. Move it aside, or rename what would overwrite it with the \`names\` map, before generating again.`
 			);
 		}
 		if (existing === content) {
@@ -124,7 +132,8 @@ async function generate(configPath: string, dryRun: boolean): Promise<void> {
 	}
 
 	await removeStale(root, files, dryRun);
-	await updateRegions(root, planned, dryRun, written);
+	await updateRegions(root, planned, model, dryRun, written);
+	reportSurface(before, generatedValues(planned), planned);
 }
 
 /** Deletes modules an earlier run wrote and this one no longer produces. */
@@ -158,16 +167,13 @@ async function removeStale(
 async function updateRegions(
 	root: string,
 	planned: ReturnType<typeof plan>,
+	model: Parameters<typeof securityNotes>[0],
 	dryRun: boolean,
 	written: string
 ): Promise<void> {
-	const surfacePath = join(root, SURFACE);
-	const before = previousValues((await read(surfacePath)) ?? "");
-	const after = generatedValues(planned);
-
 	const regions: readonly [string, string, string][] = [
 		[INDEX, exportsRegion(planned, posix(RESOURCES)), "generated exports"],
-		[SURFACE, surfaceRegion(planned), "generated public surface"],
+		[README, securityNotes(model), "generated authentication notes"],
 	];
 
 	for (const [file, content, note] of regions) {
@@ -176,6 +182,12 @@ async function updateRegions(
 
 		if (existing === undefined) {
 			report(`${posix(file)} is missing, so its ${note} region was skipped`);
+			continue;
+		}
+		// A README is prose someone wrote. It gets the notes where it asks for
+		// them and nowhere else, unlike the two files this template owns.
+		if (file === README && !hasRegion(existing)) {
+			report(`${posix(file)} carries no markers, so its ${note} were skipped`);
 			continue;
 		}
 
@@ -190,6 +202,14 @@ async function updateRegions(
 		report(`${posix(file)} ${written}`);
 	}
 
+}
+
+/** What this run did to the package's public API, which is a semver question. */
+function reportSurface(
+	before: readonly string[],
+	after: readonly string[],
+	planned: ReturnType<typeof plan>
+): void {
 	const added = after.filter((name) => !before.includes(name));
 	const removed = before.filter((name) => !after.includes(name));
 

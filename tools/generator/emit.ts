@@ -77,10 +77,13 @@ export function emitModule(
 /**
  * Documents describe query parameters this client cannot put on a URL: Stripe
  * types `created` as a number or an object of comparisons, and sends the object
- * form as `created[gte]=`, which is several keys rather than one value. Narrowing
- * each property to what `buildUrl` builds keeps the forms that work and turns the
- * rest into `never`, so the module compiles and the impossible call is refused at
- * the call site rather than silently sent wrong.
+ * form as `created[gte]=`, which is several keys rather than one value.
+ * Narrowing each property to what `buildUrl` builds keeps the forms that work
+ * and refuses the rest at the call site rather than sending them wrong.
+ *
+ * A parameter the document never typed arrives here as `unknown`, which would
+ * narrow to `never` and make a working parameter impossible to pass. Those keep
+ * the whole of `QueryValue` instead.
  */
 function sendable(module: PlannedModule): string {
 	const needed = module.operations.some((operation) =>
@@ -90,7 +93,14 @@ function sendable(module: PlannedModule): string {
 	);
 
 	return needed
-		? "/** The part of a documented query type that this client can put on a URL. */\ntype Sendable<T> = Extract<T, QueryValue>;"
+		? [
+			"/**",
+			" * The part of a documented query type that this client can put on a URL.",
+			" * A parameter the document typed as nothing keeps everything a URL can",
+			" * carry, rather than becoming impossible to pass.",
+			" */",
+			"type Sendable<T> = unknown extends T ? QueryValue : Extract<T, QueryValue>;",
+		].join("\n")
 		: "";
 }
 

@@ -4,8 +4,10 @@
 //
 // Parsing comes from `@redocly/openapi-core`, pinned to the major that
 // `openapi-typescript` resolves through (it depends on `^1.34.6` as of 7.13.0).
-// One resolver behind both means the emitted types and this model cannot
-// disagree about what a `$ref` points at.
+// That pin is the only thing keeping the emitted types and this model from
+// disagreeing about what a `$ref` points at: `openapi-typescript` re-bundles
+// through its own copy whatever it is handed, so a newer major installed here
+// would change this model and leave the types alone.
 
 import {
 	BaseResolver,
@@ -122,9 +124,12 @@ export interface LoadedDocument {
 
 	/**
 	 * The same document with its references bundled, which is what
-	 * `openapi-typescript` is handed. Passing the object rather than the path
-	 * means the types and the model resolved every `$ref` through one resolver,
-	 * so they cannot disagree.
+	 * `openapi-typescript` is handed.
+	 *
+	 * It bundles again through its own copy either way, so passing the object
+	 * rather than the path buys one read of a remote document rather than two,
+	 * and the certainty that both saw the same bytes. What keeps their answers
+	 * to a given `$ref` identical is the version pin at the top of this file.
 	 */
 	readonly bundled: unknown;
 }
