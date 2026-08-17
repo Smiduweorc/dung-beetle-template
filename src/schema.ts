@@ -108,6 +108,8 @@ export interface operations {
                  */
                 readonly page?: number;
                 readonly per_page?: components["parameters"]["PerPage"];
+                /** @description Whatever the API decides this means; the document does not say. */
+                readonly filter?: unknown;
                 readonly tag?: readonly string[];
             };
             readonly header?: {
