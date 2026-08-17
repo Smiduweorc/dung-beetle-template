@@ -8,8 +8,12 @@ import { joined } from "../query.js";
 import type { Operation, QueryValue } from "../operation.js";
 import type { components, paths } from "../schema.js";
 
-/** The part of a documented query type that this client can put on a URL. */
-type Sendable<T> = Extract<T, QueryValue>;
+/**
+ * The part of a documented query type that this client can put on a URL.
+ * A parameter the document typed as nothing keeps everything a URL can
+ * carry, rather than becoming impossible to pass.
+ */
+type Sendable<T> = unknown extends T ? QueryValue : Extract<T, QueryValue>;
 
 /** `components.schemas.new-user` as the document declares it. */
 export type NewUser = components["schemas"]["new-user"];
@@ -28,6 +32,9 @@ export interface ListUsersQuery {
 	 */
 	readonly page?: Sendable<ListUsersWireQuery["page"]>;
 	readonly perPage?: Sendable<ListUsersWireQuery["per_page"]>;
+
+	/** Whatever the API decides this means; the document does not say. */
+	readonly filter?: Sendable<ListUsersWireQuery["filter"]>;
 	readonly tag?: ListUsersWireQuery["tag"];
 }
 
@@ -51,6 +58,7 @@ export function listUsers(query: ListUsersQuery = {}): Operation<ListUsersRespon
 		query: {
 			page: query.page,
 			per_page: query.perPage,
+			filter: query.filter,
 			tag: joined(query.tag, ","),
 		},
 	};
