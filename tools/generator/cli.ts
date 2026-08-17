@@ -10,6 +10,7 @@ import { emitSchema } from "./schema.js";
 import {
 	exportsRegion,
 	generatedValues,
+	posix,
 	previousValues,
 	surfaceRegion,
 	withRegion,
@@ -113,13 +114,13 @@ async function generate(configPath: string, dryRun: boolean): Promise<void> {
 			);
 		}
 		if (existing === content) {
-			report(`${file} unchanged`);
+			report(`${posix(file)} unchanged`);
 			continue;
 		}
 		if (!dryRun) {
 			await writeFile(path, content, "utf8");
 		}
-		report(`${file} ${written}`);
+		report(`${posix(file)} ${written}`);
 	}
 
 	await removeStale(root, files, dryRun);
@@ -148,7 +149,9 @@ async function removeStale(
 		if (!dryRun) {
 			await rm(join(root, file));
 		}
-		report(`${file} ${dryRun ? "would be removed" : "removed"}, the document no longer describes it`);
+		report(
+			`${posix(file)} ${dryRun ? "would be removed" : "removed"}, the document no longer describes it`
+		);
 	}
 }
 
@@ -163,7 +166,7 @@ async function updateRegions(
 	const after = generatedValues(planned);
 
 	const regions: readonly [string, string, string][] = [
-		[INDEX, exportsRegion(planned, RESOURCES.split(/[\\/]/u).join("/")), "generated exports"],
+		[INDEX, exportsRegion(planned, posix(RESOURCES)), "generated exports"],
 		[SURFACE, surfaceRegion(planned), "generated public surface"],
 	];
 
@@ -172,19 +175,19 @@ async function updateRegions(
 		const existing = await read(path);
 
 		if (existing === undefined) {
-			report(`${file} is missing, so its ${note} region was skipped`);
+			report(`${posix(file)} is missing, so its ${note} region was skipped`);
 			continue;
 		}
 
 		const updated = withRegion(existing, content, note);
 		if (updated === existing) {
-			report(`${file} unchanged`);
+			report(`${posix(file)} unchanged`);
 			continue;
 		}
 		if (!dryRun) {
 			await writeFile(path, updated, "utf8");
 		}
-		report(`${file} ${written}`);
+		report(`${posix(file)} ${written}`);
 	}
 
 	const added = after.filter((name) => !before.includes(name));

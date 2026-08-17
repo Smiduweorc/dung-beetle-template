@@ -27,19 +27,25 @@ async function emit(name: string, label = name): Promise<Map<string, string>> {
 	return files;
 }
 
+/**
+ * Reads a checked-in file for comparison against fresh output.
+ *
+ * Line endings are normalised because they belong to the checkout rather than
+ * to the content: `.gitattributes` keeps the repository on LF, and this stays
+ * correct in a clone made before that file existed. The generator itself only
+ * ever writes `\n`.
+ */
+async function checkedIn(...path: readonly string[]): Promise<string> {
+	return (await readFile(join(root, ...path), "utf8")).replaceAll("\r\n", "\n");
+}
+
 test("the checked-in modules are what the generator writes today", async () => {
 	// The template ships generated output, so `tsc` and `eslint` check it on
 	// every run. That only means something while it matches the document.
 	const written = await emit("users.yaml", "./tests/generator/fixtures/users.yaml");
 
-	assert.equal(
-		await readFile(join(root, "src", "resources", "users.ts"), "utf8"),
-		written.get("users.ts")
-	);
-	assert.equal(
-		await readFile(join(root, "src", "schema.ts"), "utf8"),
-		written.get("schema.ts")
-	);
+	assert.equal(await checkedIn("src", "resources", "users.ts"), written.get("users.ts"));
+	assert.equal(await checkedIn("src", "schema.ts"), written.get("schema.ts"));
 });
 
 test("a document the runtime cannot fully express still emits code that compiles", async () => {

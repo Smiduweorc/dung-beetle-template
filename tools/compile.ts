@@ -81,9 +81,14 @@ export async function compileGenerated(
 			maxBuffer: 64 * 1024 * 1024,
 		});
 
+		// `tsc` reports with forward slashes even where the directory was joined
+		// with backslashes, so both forms are trimmed. A Windows failure that
+		// prints full temporary paths is a round trip nobody needs.
+		const posix = directory.split(/[\\/]/u).join("/");
+
 		return {
 			ok: compiled.status === 0,
-			errors: compiled.stdout.trim().replaceAll(directory, "."),
+			errors: compiled.stdout.trim().replaceAll(directory, ".").replaceAll(posix, "."),
 		};
 	} finally {
 		await rm(directory, { recursive: true, force: true });

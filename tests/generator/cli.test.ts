@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 
+import { posix } from "../../tools/generator/surface.js";
+
 const root = dirname(dirname(import.meta.dirname));
 const cli = join(root, "tools", "generator", "cli.ts");
 
@@ -59,6 +61,13 @@ async function project(): Promise<string> {
 function config(directory: string): string {
 	return join(directory, "dungbeetle.config.ts");
 }
+
+test("reported paths use forward slashes, whatever the platform joined them with", () => {
+	// What the CLI prints, and what it writes into `index.ts` as an import
+	// specifier. On Windows both are built with backslashes.
+	assert.equal(posix("src\\resources\\users.ts"), "src/resources/users.ts");
+	assert.equal(posix("src/resources/users.ts"), "src/resources/users.ts");
+});
 
 test("--help explains the command and exits zero", () => {
 	const help = run(["--help"]);

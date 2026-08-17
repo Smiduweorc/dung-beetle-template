@@ -6,6 +6,16 @@ import type { Plan, PlannedModule } from "./plan.js";
 // built-artifact test checks. Both are edited inside markers, so whatever a
 // human wrote around them survives.
 
+/**
+ * A path with forward slashes, whatever the platform builds. Windows joins with
+ * backslashes, which would emit `./src\resources/users.js` as an import
+ * specifier and print paths no documented output matches. Git reports
+ * repository paths the same way for the same reason.
+ */
+export function posix(path: string): string {
+	return path.split(/[\\/]/u).join("/");
+}
+
 const START = "// dung-beetle:start";
 const END = "// dung-beetle:end";
 

@@ -1,0 +1,9 @@
+# The generator writes LF, and a test compares the modules checked into `src/`
+# against what it writes today. Without this, Git hands a Windows checkout CRLF,
+# that comparison fails, and `npm run generate` rewrites every file it touches.
+* text=auto eol=lf
+
+# Left exactly as fetched.
+*.jpeg binary
+*.jpg binary
+*.png binary
