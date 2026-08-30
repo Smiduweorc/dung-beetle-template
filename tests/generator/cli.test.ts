@@ -207,3 +207,80 @@ test("a module the document no longer describes is removed, and only if it was g
 		await rm(directory, { recursive: true, force: true });
 	}
 });
+
+test("--spec reads a document the configuration does not name", async () => {
+	const directory = await project();
+	const widgets = join(import.meta.dirname, "fixtures", "widgets.yaml");
+
+	try {
+		// The configuration still points at users.yaml, so what lands is the
+		// measure of which document was read.
+		const generated = run(["--config", config(directory), "--spec", widgets]);
+
+		assert.equal(generated.status, 0);
+		assert.deepEqual((await readdir(join(directory, "src", "resources"))).sort(), [
+			"gadgets.ts",
+			"widgets.ts",
+		]);
+		assert.match(generated.stderr, /public names added: .*listWidgets/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("--spec leaves the rest of the configuration in force", async () => {
+	const directory = await project();
+	const widgets = join(import.meta.dirname, "fixtures", "widgets.yaml");
+
+	try {
+		await writeFile(
+			config(directory),
+			"export default { spec: \"./users.yaml\", names: { \"GET /widgets\": \"listAllWidgets\" } };\n",
+			"utf8"
+		);
+
+		const generated = run(["--config", config(directory), "--spec", widgets]);
+
+		assert.equal(generated.status, 0);
+		assert.match(generated.stderr, /public names added: .*listAllWidgets/u);
+		assert.doesNotMatch(generated.stderr, /listWidgets\b/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("--spec alone generates where there is no configuration file", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "dung-beetle-cli-"));
+	const widgets = join(import.meta.dirname, "fixtures", "widgets.yaml");
+
+	try {
+		const generated = run(["--config", config(directory), "--spec", widgets]);
+
+		assert.equal(generated.status, 0);
+		assert.match(generated.stderr, /no dungbeetle\.config\.ts/u);
+		assert.deepEqual((await readdir(join(directory, "src", "resources"))).sort(), [
+			"gadgets.ts",
+			"widgets.ts",
+		]);
+
+		// Neither managed region is there to update, which is reported rather
+		// than fatal.
+		assert.match(generated.stderr, /index\.ts is missing/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a configuration file that is not there is still an error without --spec", async () => {
+	const missing = run(["--config", join(tmpdir(), "no-such-dungbeetle.config.ts")]);
+
+	assert.equal(missing.status, 1);
+	assert.match(missing.stderr, /Could not read/u);
+});
+
+test("--spec with nothing after it is a usage error", () => {
+	const empty = run(["--spec", ""]);
+
+	assert.equal(empty.status, 2);
+	assert.match(empty.stderr, /--spec needs a path or a URL/u);
+});

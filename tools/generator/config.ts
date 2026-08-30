@@ -1,3 +1,4 @@
+import { access } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import type { SpecHeader } from "./document.js";
@@ -73,4 +74,45 @@ export async function loadConfig(path: string): Promise<GeneratorConfig> {
 	}
 
 	return { spec, runtimeImport, schemaImport, specHeaders, names };
+}
+
+/** The configuration a run reads, and where its `spec` came from. */
+export interface ResolvedConfig {
+	readonly config: GeneratorConfig;
+
+	/** False when there was no file and `--spec` stood in for one. */
+	readonly fromFile: boolean;
+}
+
+/**
+ * The configuration for a run, with `spec` replaced where the command line
+ * gave one.
+ *
+ * A missing file is only a failure when nothing replaces it: `--spec` on its
+ * own is enough to generate, which is what lets the command run against a
+ * document in a project that has no configuration yet. Where the file is
+ * there, the flag replaces its `spec` and leaves the rest of it in force, so
+ * the `names` a project has settled still apply to a document read from the
+ * command line.
+ */
+export async function resolveConfig(
+	path: string,
+	spec: string | undefined
+): Promise<ResolvedConfig> {
+	if (spec !== undefined && !(await exists(path))) {
+		return { config: { spec }, fromFile: false };
+	}
+
+	const config = await loadConfig(path);
+
+	return { config: spec === undefined ? config : { ...config, spec }, fromFile: true };
+}
+
+async function exists(path: string): Promise<boolean> {
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
 }

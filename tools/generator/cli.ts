@@ -1,8 +1,8 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { ConfigError, loadConfig } from "./config.js";
+import { ConfigError, resolveConfig } from "./config.js";
 import { load, SpecError } from "./document.js";
 import { BANNER_MARK, emitModule } from "./emit.js";
 import { plan, PlanError } from "./plan.js";
@@ -26,6 +26,10 @@ Writes resource modules from the OpenAPI document named in dungbeetle.config.ts.
 
 Options:
   --config <path>  Configuration file. Default: ./dungbeetle.config.ts
+  --spec <path>    Document to read, in place of the one the configuration
+                   names. A path is resolved against the working directory and
+                   a URL is taken as it stands. Where there is no configuration
+                   file this is enough on its own.
   --dry-run        Report what would change and write nothing.
   --help           Print this and exit.
 
@@ -49,6 +53,7 @@ async function main(argv: readonly string[]): Promise<number> {
 			args: [...argv],
 			options: {
 				config: { type: "string", default: "dungbeetle.config.ts" },
+				spec: { type: "string" },
 				"dry-run": { type: "boolean", default: false },
 				help: { type: "boolean", default: false },
 			},
@@ -65,8 +70,14 @@ async function main(argv: readonly string[]): Promise<number> {
 		return 0;
 	}
 
+	if (options.spec !== undefined && options.spec.length === 0) {
+		report("--spec needs a path or a URL.");
+		report(HELP);
+		return 2;
+	}
+
 	try {
-		await generate(resolve(options.config), options["dry-run"]);
+		await generate(resolve(options.config), options["dry-run"], options.spec);
 		return 0;
 	} catch (error) {
 		if (error instanceof SpecError || error instanceof PlanError || error instanceof ConfigError) {
@@ -77,12 +88,28 @@ async function main(argv: readonly string[]): Promise<number> {
 	}
 }
 
-async function generate(configPath: string, dryRun: boolean): Promise<void> {
-	const config = await loadConfig(configPath);
+async function generate(
+	configPath: string,
+	dryRun: boolean,
+	override: string | undefined
+): Promise<void> {
+	const { config, fromFile } = await resolveConfig(configPath, override);
 	const root = dirname(configPath);
+
+	if (!fromFile) {
+		report(
+			`no ${basename(configPath)}, so --spec is the whole configuration and no name overrides apply`
+		);
+	}
+
+	// A `--spec` is resolved against the working directory, where the person
+	// typing it is; `spec` in the file is resolved against the file, where its
+	// author was. `config.spec` itself stays the text that was given, because
+	// it is what the generated banners cite.
+	const base = override === undefined ? root : process.cwd();
 	const spec = /^[a-z][a-z0-9+.-]*:/iu.test(config.spec)
 		? config.spec
-		: resolve(root, config.spec);
+		: resolve(base, config.spec);
 
 	const { model, bundled } = await load(spec, { headers: config.specHeaders });
 	const planned = plan(model, { names: config.names });

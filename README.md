@@ -381,7 +381,15 @@ export default config;
 ```sh
 npm run generate                # write the modules
 npm run generate -- --dry-run   # report what would change and write nothing
+npm run generate -- --spec https://api.acme.com/openapi.json
 ```
+
+`--spec` reads a document other than the one the configuration names, which is
+how you try an API without editing a file first. A path is resolved against the
+working directory and a URL is taken as it stands; the rest of the
+configuration, `names` included, still applies. Where there is no
+`dungbeetle.config.ts` at all the flag is enough on its own, and the run says
+so, since no name overrides can apply to a document named on the command line.
 
 It writes four things:
 
