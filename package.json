@@ -55,7 +55,7 @@
 		"@types/node": "^26.6.2",
 		"@types/pluralize": "^0.0.33",
 		"eslint": "^10.11.0",
-		"git-cliff": "^2.13.1",
+		"git-cliff": "^2.14.2",
 		"lefthook": "^2.1.14",
 		"openapi-typescript": "^7.13.0",
 		"pluralize": "^8.0.0",
