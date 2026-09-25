@@ -59,7 +59,7 @@
 		"lefthook": "^2.1.14",
 		"openapi-typescript": "^7.13.0",
 		"pluralize": "^8.0.0",
-		"tsx": "^4.23.13",
+		"tsx": "^4.23.15",
 		"typedoc": "^0.28.20",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.70.0"
