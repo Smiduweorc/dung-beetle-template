@@ -1,0 +1,116 @@
+{
+	"openrpc": "1.3.2",
+	"info": {
+		"title": "Ledger",
+		"version": "2026-11-01",
+		"description": "The parts of an OpenRPC document the generator has to read correctly."
+	},
+	"methods": [
+		{
+			"name": "ledger_getAccount",
+			"summary": "One account by its id.",
+			"params": [
+				{ "$ref": "#/components/contentDescriptors/AccountId" }
+			],
+			"result": {
+				"name": "account",
+				"schema": { "$ref": "#/components/schemas/Account" }
+			},
+			"errors": [
+				{ "$ref": "#/components/errors/NotFound" }
+			]
+		},
+		{
+			"name": "ledger_listTransfers",
+			"description": "Transfers out of an account, newest first.",
+			"params": [
+				{ "$ref": "#/components/contentDescriptors/AccountId" },
+				{
+					"name": "limit",
+					"description": "How many to return.",
+					"schema": { "type": "integer", "minimum": 1 }
+				},
+				{
+					"name": "before",
+					"schema": { "type": "string", "format": "date-time" }
+				}
+			],
+			"result": {
+				"name": "transfers",
+				"schema": {
+					"type": "array",
+					"items": { "$ref": "#/components/schemas/Transfer" }
+				}
+			}
+		},
+		{
+			"name": "ledger_transfer",
+			"paramStructure": "by-name",
+			"params": [
+				{ "name": "from_account", "required": true, "schema": { "type": "string" } },
+				{ "name": "to_account", "required": true, "schema": { "type": "string" } },
+				{ "name": "amount", "required": true, "schema": { "$ref": "#/components/schemas/Amount" } },
+				{ "name": "memo", "deprecated": true, "schema": { "type": "string" } }
+			],
+			"result": {
+				"name": "transfer",
+				"schema": { "$ref": "#/components/schemas/Transfer" }
+			},
+			"errors": [
+				{ "code": 4001, "message": "Insufficient funds" }
+			]
+		},
+		{
+			"name": "ledger_balanceChanged",
+			"summary": "Sent by the server, never answered.",
+			"params": [
+				{ "$ref": "#/components/contentDescriptors/AccountId" }
+			]
+		},
+		{
+			"name": "ping",
+			"deprecated": true,
+			"params": [],
+			"result": { "name": "pong", "schema": { "const": "pong" } }
+		}
+	],
+	"components": {
+		"contentDescriptors": {
+			"AccountId": {
+				"name": "account_id",
+				"required": true,
+				"schema": { "type": "string" }
+			}
+		},
+		"errors": {
+			"NotFound": { "code": 4004, "message": "No such account" }
+		},
+		"schemas": {
+			"Account": {
+				"type": "object",
+				"required": ["id", "balance"],
+				"properties": {
+					"id": { "type": "string" },
+					"balance": { "$ref": "#/components/schemas/Amount" }
+				}
+			},
+			"Amount": {
+				"type": "object",
+				"required": ["currency", "minor_units"],
+				"properties": {
+					"currency": { "type": "string" },
+					"minor_units": { "type": "integer" }
+				}
+			},
+			"Transfer": {
+				"type": "object",
+				"required": ["id", "amount"],
+				"properties": {
+					"id": { "type": "string" },
+					"amount": { "$ref": "#/components/schemas/Amount" },
+					"memo": { "type": ["string", "null"] }
+				}
+			}
+		}
+	}
+}

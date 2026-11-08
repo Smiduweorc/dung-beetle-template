@@ -11,6 +11,13 @@ import { dirname, join } from "node:path";
 
 const root = dirname(import.meta.dirname);
 
+/**
+ * Generated schema modules, which sit at the top of `src/`. They are never
+ * copied from this repository, so a test compiles against the schema it just
+ * emitted rather than against the checked-in one.
+ */
+const SCHEMAS = new Set(["schema.ts", "rpc-schema.ts"]);
+
 export interface Compilation {
 	readonly ok: boolean;
 
@@ -19,8 +26,8 @@ export interface Compilation {
 }
 
 /**
- * Compiles `files`, keyed `schema.ts` for the schema module and `<name>.ts`
- * for each resource module.
+ * Compiles `files`, keyed `schema.ts` or `rpc-schema.ts` for a schema module, `<name>.ts`
+ * for each resource module, and a path under `src/` for anything else.
  *
  * The project is built with the DOM lib rather than `@types/node`, so this also
  * checks that generated code compiles for a consumer building for the browser.
@@ -36,17 +43,20 @@ export async function compileGenerated(
 		// Every runtime module, read rather than listed, so adding one does not
 		// quietly leave this checking a stale copy of the runtime.
 		for (const file of await readdir(join(root, "src"), { withFileTypes: true })) {
-			if (file.isFile() && file.name.endsWith(".ts") && file.name !== "schema.ts") {
+			if (file.isFile() && file.name.endsWith(".ts") && !SCHEMAS.has(file.name)) {
 				await cp(join(root, "src", file.name), join(directory, "src", file.name));
 			}
 		}
 
 		for (const [name, source] of files) {
+			// A key with a slash is already a path under `src/`, which is how the
+			// OpenRPC modules and their schema are placed.
 			const path =
-				name === "schema.ts"
-					? join(directory, "src", name)
+				SCHEMAS.has(name) || name.includes("/")
+					? join(directory, "src", ...name.split("/"))
 					: join(directory, "src", "resources", name);
 
+			await mkdir(dirname(path), { recursive: true });
 			await writeFile(path, source, "utf8");
 		}
 

@@ -61,7 +61,8 @@ export function exportsRegion(plan: Plan, resources: string): string {
 	return blocks.join("\n\n");
 }
 
-function exportList(keyword: string, names: readonly string[], from: string): string {
+/** One `export { ... } from` statement, a name per line. */
+export function exportList(keyword: string, names: readonly string[], from: string): string {
 	return [`${keyword} {`, ...names.map((name) => `\t${name},`), `} from ${from};`].join("\n");
 }
 

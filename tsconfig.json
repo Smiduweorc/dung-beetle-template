@@ -24,7 +24,9 @@
 	},
 	"include": [
 		"./src/**/*.ts",
-		"index.ts"
+		"index.ts",
+		"openrpc.ts",
+		"grpc.ts"
 	],
 	"exclude": [
 		"node_modules",

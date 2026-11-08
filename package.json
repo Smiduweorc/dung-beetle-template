@@ -10,6 +10,14 @@
 		".": {
 			"types": "./dist/types/index.d.ts",
 			"default": "./dist/index.js"
+		},
+		"./openrpc": {
+			"types": "./dist/types/openrpc.d.ts",
+			"default": "./dist/openrpc.js"
+		},
+		"./grpc": {
+			"types": "./dist/types/grpc.d.ts",
+			"default": "./dist/grpc.js"
 		}
 	},
 	"engines": {
@@ -48,8 +56,12 @@
 		"url": "git+https://github.com/Smiduweorc/dung-beetle-template"
 	},
 	"devDependencies": {
+		"@bufbuild/buf": "^1.75.0",
+		"@bufbuild/protoc-gen-es": "^2.17.0",
 		"@commitlint/cli": "^21.2.4",
 		"@commitlint/config-conventional": "^21.2.3",
+		"@connectrpc/connect": "^2.3.0",
+		"@connectrpc/connect-node": "^2.3.0",
 		"@eslint/js": "^10.0.1",
 		"@redocly/openapi-core": "^1.34.20",
 		"@types/node": "^26.6.6",
@@ -68,5 +80,8 @@
 		"openapi-typescript": {
 			"typescript": "$typescript"
 		}
+	},
+	"dependencies": {
+		"@bufbuild/protobuf": "^2.17.0"
 	}
 }

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package widgets.v1;
+
+import "common/v1/money.proto";
+import "google/protobuf/timestamp.proto";
+
+message Widget {
+  string id = 1;
+  string name = 2;
+  common.v1.Money price = 3;
+  google.protobuf.Timestamp created_at = 4;
+  Size size = 5;
+}
+
+enum Size {
+  SIZE_UNSPECIFIED = 0;
+  SIZE_SMALL = 1;
+  SIZE_LARGE = 2;
+}
+
+message GetWidgetRequest {
+  string id = 1;
+}
+
+message ListWidgetsRequest {
+  Size size = 1;
+}
+
+service WidgetService {
+  rpc GetWidget(GetWidgetRequest) returns (Widget);
+  rpc ListWidgets(ListWidgetsRequest) returns (stream Widget);
+}

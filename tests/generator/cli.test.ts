@@ -41,7 +41,12 @@ async function project(): Promise<string> {
 	);
 	await writeFile(
 		join(directory, "dungbeetle.config.ts"),
-		"export default { spec: \"./users.yaml\" };\n",
+		"export default { openapi: { spec: \"./users.yaml\" } };\n",
+		"utf8"
+	);
+	await writeFile(
+		join(directory, "package.json"),
+		`${JSON.stringify({ name: "fixture", type: "module", exports: { ".": "./dist/index.js" } }, null, "\t")}\n`,
 		"utf8"
 	);
 	await writeFile(
@@ -98,7 +103,7 @@ test("a document that is not valid stops the run before anything is written", as
 	try {
 		await writeFile(
 			config(directory),
-			"export default { spec: \"./broken.yaml\" };\n",
+			"export default { openapi: { spec: \"./broken.yaml\" } };\n",
 			"utf8"
 		);
 		await cp(
@@ -235,7 +240,7 @@ test("--spec leaves the rest of the configuration in force", async () => {
 	try {
 		await writeFile(
 			config(directory),
-			"export default { spec: \"./users.yaml\", names: { \"GET /widgets\": \"listAllWidgets\" } };\n",
+			"export default { openapi: { spec: \"./users.yaml\", names: { \"GET /widgets\": \"listAllWidgets\" } } };\n",
 			"utf8"
 		);
 
@@ -283,4 +288,173 @@ test("--spec with nothing after it is a usage error", () => {
 
 	assert.equal(empty.status, 2);
 	assert.match(empty.stderr, /--spec needs a path or a URL/u);
+});
+
+/** The project above, with the OpenRPC and gRPC fixtures beside it and `config` as its configuration. */
+async function protocols(configuration: string, dependencies?: Record<string, string>): Promise<string> {
+	const directory = await project();
+
+	await cp(join(import.meta.dirname, "fixtures", "ledger.openrpc.json"), join(directory, "ledger.json"));
+	await cp(join(import.meta.dirname, "fixtures", "protos"), join(directory, "protos"), { recursive: true });
+	await writeFile(config(directory), configuration, "utf8");
+	await writeFile(
+		join(directory, "package.json"),
+		`${JSON.stringify({ name: "fixture", type: "module", exports: { ".": "./dist/index.js" }, dependencies }, null, "\t")}\n`,
+		"utf8"
+	);
+
+	return directory;
+}
+
+const ALL = "export default { openapi: { spec: \"./users.yaml\" }, openrpc: { spec: \"./ledger.json\" }, grpc: { protos: \"./protos\" } };\n";
+const PROTOBUF = { "@bufbuild/protobuf": "^2.0.0" };
+
+async function manifest(directory: string): Promise<{ exports: Record<string, unknown> }> {
+	return JSON.parse(await readFile(join(directory, "package.json"), "utf8")) as { exports: Record<string, unknown> };
+}
+
+async function exists(path: string): Promise<boolean> {
+	return await readFile(path).then(() => true, () => false);
+}
+
+test("every configured protocol is written, with its subpath export and surface test", async () => {
+	const directory = await protocols(ALL, PROTOBUF);
+
+	try {
+		const generated = run(["--config", config(directory)]);
+
+		assert.equal(generated.status, 0, generated.stderr);
+		assert.deepEqual((await readdir(join(directory, "src", "methods"))).sort(), ["ledger.ts", "methods.ts", "types.ts"]);
+		assert.ok(await exists(join(directory, "src", "rpc-schema.ts")));
+		assert.ok(await exists(join(directory, "src", "grpc", "widgets", "v1", "widgets_pb.ts")));
+		assert.match(await readFile(join(directory, "openrpc.ts"), "utf8"), /ledgerTransfer,/u);
+		assert.match(await readFile(join(directory, "grpc.ts"), "utf8"), /WidgetService,/u);
+		assert.match(await readFile(join(directory, "tests", "dist", "openrpc.test.js"), "utf8"), /from "fixture\/openrpc"/u);
+		assert.match(await readFile(join(directory, "tests", "dist", "grpc.test.js"), "utf8"), /from "fixture\/grpc"/u);
+		assert.deepEqual((await manifest(directory)).exports, {
+			".": "./dist/index.js",
+			"./openrpc": { types: "./dist/types/openrpc.d.ts", default: "./dist/openrpc.js" },
+			"./grpc": { types: "./dist/types/grpc.d.ts", default: "./dist/grpc.js" },
+		});
+		assert.match(generated.stderr, /ledger_balanceChanged has no result, so it is a notification and was not generated/u);
+
+		const again = run(["--config", config(directory)]);
+		assert.doesNotMatch(again.stderr, /written/u);
+		assert.match(again.stderr, /package\.json unchanged/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a protocol taken out of the configuration takes its files and its export with it", async () => {
+	const directory = await protocols(ALL, PROTOBUF);
+	const mine = join(directory, "src", "methods", "mine.ts");
+
+	try {
+		run(["--config", config(directory)]);
+		await writeFile(mine, "export const mine = 1;\n", "utf8");
+		await writeFile(config(directory), "export default { openapi: { spec: \"./users.yaml\" } };\n", "utf8");
+		await writeFile(
+			join(directory, "package.json"),
+			`${JSON.stringify({ ...(await manifest(directory)), dependencies: {} }, null, "\t")}\n`,
+			"utf8"
+		);
+
+		const reduced = run(["--config", config(directory)]);
+
+		assert.equal(reduced.status, 0, reduced.stderr);
+		assert.deepEqual(await readdir(join(directory, "src", "methods")), ["mine.ts"]);
+		for (const gone of ["openrpc.ts", "grpc.ts", "src/rpc-schema.ts", "tests/dist/openrpc.test.js", "tests/dist/grpc.test.js", "src/grpc/widgets/v1/widgets_pb.ts", "src/grpc/common/v1/money_pb.ts"]) {
+			assert.equal(await exists(join(directory, ...gone.split("/"))), false, gone);
+		}
+		assert.match(reduced.stderr, /grpc\.ts removed, the configuration no longer produces it/u);
+		assert.deepEqual((await manifest(directory)).exports, { ".": "./dist/index.js" });
+		assert.ok(await exists(join(directory, "src", "resources", "users.ts")));
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("gRPC without @bufbuild/protobuf in dependencies is refused before anything is written", async () => {
+	const directory = await protocols("export default { grpc: { protos: \"./protos\" } };\n");
+
+	try {
+		const refused = run(["--config", config(directory)]);
+
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /npm install @bufbuild\/protobuf@\^2/u);
+		assert.equal(await exists(join(directory, "grpc.ts")), false);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("@bufbuild/protobuf without gRPC configured is refused, since consumers would install it for nothing", async () => {
+	const directory = await protocols("export default { openapi: { spec: \"./users.yaml\" } };\n", PROTOBUF);
+
+	try {
+		const refused = run(["--config", config(directory)]);
+
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /npm uninstall @bufbuild\/protobuf/u);
+		assert.deepEqual(await readdir(join(directory, "src", "resources")), []);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("OpenRPC without a package.json is refused, since its subpath lives in exports", async () => {
+	const directory = await protocols("export default { openrpc: { spec: \"./ledger.json\" } };\n");
+
+	try {
+		await rm(join(directory, "package.json"));
+		const refused = run(["--config", config(directory)]);
+
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /There is no package\.json/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a document refused in one protocol leaves the others unwritten", async () => {
+	const directory = await protocols(
+		"export default { openapi: { spec: \"./users.yaml\" }, openrpc: { spec: \"./missing.json\" } };\n"
+	);
+
+	try {
+		const refused = run(["--config", config(directory)]);
+
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /Could not read an OpenRPC document/u);
+		assert.deepEqual(await readdir(join(directory, "src", "resources")), []);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a misspelled configuration key is a refusal naming the key", async () => {
+	const directory = await protocols("export default { openapi: { spec: \"./users.yaml\", nmaes: {} } };\n");
+
+	try {
+		const refused = run(["--config", config(directory)]);
+
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /`openapi\.nmaes`/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("--spec is refused when the configuration has no openapi to replace", async () => {
+	const directory = await protocols("export default { openrpc: { spec: \"./ledger.json\" } };\n");
+
+	try {
+		const refused = run(["--config", config(directory), "--spec", "./users.yaml"]);
+
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /--spec replaces `openapi\.spec`/u);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });

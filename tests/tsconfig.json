@@ -8,6 +8,8 @@
 	"include": [
 		"./**/*.ts",
 		"../index.ts",
+		"../openrpc.ts",
+		"../grpc.ts",
 		"../src/**/*.ts",
 		"../tools/**/*.ts"
 	],
