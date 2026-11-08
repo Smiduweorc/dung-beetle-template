@@ -1,0 +1,37 @@
+{
+	"openrpc": "1.2.6",
+	"info": {
+		"title": "Ethereum JSON-RPC (excerpt)",
+		"version": "1.0.0",
+		"description": "Three read-only methods from https://github.com/ethereum/execution-apis, which any public Ethereum node answers."
+	},
+	"methods": [
+		{
+			"name": "eth_chainId",
+			"summary": "Returns the chain ID of the current network.",
+			"params": [],
+			"result": { "name": "chainId", "schema": { "$ref": "#/components/schemas/uint" } }
+		},
+		{
+			"name": "eth_blockNumber",
+			"summary": "Returns the number of the most recent block.",
+			"params": [],
+			"result": { "name": "blockNumber", "schema": { "$ref": "#/components/schemas/uint" } }
+		},
+		{
+			"name": "eth_getBalance",
+			"summary": "Returns the balance of the account of a given address, in wei.",
+			"params": [
+				{ "name": "address", "required": true, "schema": { "$ref": "#/components/schemas/address" } },
+				{ "name": "block", "required": true, "schema": { "type": "string", "description": "A block number in hex, or latest, earliest, pending, safe or finalized." } }
+			],
+			"result": { "name": "balance", "schema": { "$ref": "#/components/schemas/uint" } }
+		}
+	],
+	"components": {
+		"schemas": {
+			"uint": { "title": "hex encoded unsigned integer", "type": "string", "pattern": "^0x(0|[1-9a-f][0-9a-f]*)$" },
+			"address": { "title": "hex encoded address", "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }
+		}
+	}
+}

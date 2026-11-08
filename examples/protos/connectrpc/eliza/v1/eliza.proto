@@ -1,0 +1,30 @@
+// The service behind https://demo.connectrpc.com, as published at
+// https://buf.build/connectrpc/eliza. Trimmed to the two methods the live
+// example calls.
+syntax = "proto3";
+
+package connectrpc.eliza.v1;
+
+service ElizaService {
+  // Answers one sentence with one sentence.
+  rpc Say(SayRequest) returns (SayResponse) {}
+
+  // Streams a few sentences introducing Eliza to `name`.
+  rpc Introduce(IntroduceRequest) returns (stream IntroduceResponse) {}
+}
+
+message SayRequest {
+  string sentence = 1;
+}
+
+message SayResponse {
+  string sentence = 1;
+}
+
+message IntroduceRequest {
+  string name = 1;
+}
+
+message IntroduceResponse {
+  string sentence = 1;
+}
