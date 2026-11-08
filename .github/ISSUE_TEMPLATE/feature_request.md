@@ -1,16 +1,13 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest a change to the generator or the runtime
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+Retries, caching, rate limiting, timeouts, validation and logging are out of
+scope; they go in a transport wrapper (see the README).
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**The API document you are generating from, and what it needs**
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+**What the generator does with it now**
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+**What you would like it to do instead**

@@ -1,26 +1,24 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: The generator or the client did something wrong
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**Generator or client?**
 
-**To Reproduce**
-Steps to reproduce the behavior:
+**For the generator: the document, and what it printed**
 
-1. Go to '...'
-2. Run '....'
-3. See error
+A URL, or the smallest excerpt of the document that still fails. Paste the
+full output of `npm run generate`.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**For the client: the call and the error**
 
-**Environment (please complete the following information):**
+The operation you sent (tokens and keys removed), the error class
+(`TransportError`, `HttpError`, `DecodeError`) and its `status`.
 
-- OS: [e.g. Ubuntu 24.04, Windows 11, macOS 15]
+**What you expected**
+
+**Environment**
+
+- Template commit: [`git rev-parse --short HEAD`]
 - Node.js version: [e.g. 22.11.0]
-- Package version: [e.g. 1.0.0]
-
-**Additional context**
-Add any other context about the problem here.
+- OS: [e.g. Ubuntu 24.04, Windows 11, macOS 15]
