@@ -14,3 +14,6 @@ Stripe (6.4MB) and the GitHub REST API (12.9MB) are too big to keep here, so
 Together they cover OpenAPI 3.0 and 3.1, form-encoded and JSON bodies,
 `deepObject` filters, endpoints with no documented 2xx response, and names
 that collide.
+
+`examples/` goes past generating and compiling: `npm run live` calls three
+real APIs with the clients it generates. See `examples/README.md`.
