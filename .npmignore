@@ -3,6 +3,7 @@
 /src
 /tests
 /tools
+/examples
 /index.ts
 dungbeetle.config.ts
 /docs

@@ -37,7 +37,8 @@
 		"test:dist": "npm run build && node --test \"tests/dist/*.test.js\"",
 		"docs": "typedoc",
 		"changelog": "git-cliff -o CHANGELOG.md",
-		"prepare": "lefthook install"
+		"prepare": "lefthook install",
+		"live": "tsx examples/live.ts"
 	},
 	"keywords": [
 		"typescript",

@@ -7,7 +7,7 @@ export default tseslint.config(
 		// and `src/grpc/` is protoc-gen-es's, each written in its generator's style
 		// and never edited by hand. The modules this generator writes are linted,
 		// since matching this project's style is the point of generating them.
-		ignores: ["dist/**", "docs/**", "node_modules/**", "src/schema.ts", "src/rpc-schema.ts", "src/grpc/**"],
+		ignores: ["dist/**", "docs/**", "node_modules/**", "src/schema.ts", "src/rpc-schema.ts", "src/grpc/**", "examples/.generated/**"],
 	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,

@@ -388,6 +388,12 @@ It skips, and says so in the generated code:
 `tests/generator/corpus/`. Stripe and GitHub are too big to check in; a weekly
 workflow fetches and generates them.
 
+`npm run live` goes one step further: it generates clients for the Arch User
+Repository (OpenAPI), a public Ethereum node (OpenRPC) and Connect's Eliza demo
+(gRPC), type-checks a consumer's code against them, and calls all three over
+the network. See [`examples/README.md`](examples/README.md). The same weekly
+workflow runs it.
+
 ## Known quirks
 
 - `openapi-typescript` declares a peer of TypeScript 5 and this project is on
